@@ -1,0 +1,33 @@
+Python Virtual Environment
+
+This is the "project room" (venv) we created.
+
+It contains 'flask', 'docker', etc., and should not be uploaded.
+
+venv/
+
+Python cache files
+
+These are temporary files Python creates when it runs your script.
+
+pycache/
+*.pyc
+*.pyo
+*.pyd
+
+Operating System files
+
+Common files from macOS, Windows, and Linux that should be ignored.
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+IDE configuration folders
+
+Ignores settings folders from popular code editors.
+
+.vscode/
+.idea/
+*.swp
+*.swo

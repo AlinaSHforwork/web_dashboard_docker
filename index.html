@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Dashboard</title>
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Set up a simple dark mode theme for Tailwind
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+    <style>
+        /* Use the Inter font, a clean sans-serif */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-blue-400">Docker Dashboard</h1>
+            <p class="text-gray-400">A simple dashboard showing all containers.</p>
+        </header>
+
+        <!-- Container List -->
+        <!-- We will fill this div using JavaScript -->
+        <main id="container-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Loading state... -->
+            <div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full">
+                <p class="text-center text-gray-400">Loading containers...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- 2. Our JavaScript -->
+    <script>
+        // Wait for the page to be fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchContainers();
+        });
+
+        async function fetchContainers() {
+            const containerListEl = document.getElementById('container-list');
+            
+            try {
+                // Call our Python backend's API endpoint
+                const response = await fetch('/api/containers');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const containers = await response.json();
+
+                // Clear the "Loading..." message
+                containerListEl.innerHTML = '';
+
+                if (containers.length === 0) {
+                    containerListEl.innerHTML = `
+                        <div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full">
+                            <p class="text-center text-gray-400">No containers found.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Loop over each container and create an HTML card for it
+                containers.forEach(container => {
+                    // Create a new div element
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-800 p-4 rounded-lg shadow-md flex flex-col justify-between';
+                    
+                    // Set the card's content
+                    card.innerHTML = `
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <!-- Container Name -->
+                                <h3 class="text-lg font-semibold text-white truncate">${container.name}</h3>
+                                <!-- Status Badge -->
+                                ${getStatusBadge(container.status)}
+                            </div>
+                            <!-- Image Name -->
+                            <p class="text-sm text-gray-400 truncate mb-1" title="${container.image}">${container.image}</p>
+                            <!-- Container ID -->
+                            <p class="text-xs text-gray-500 font-mono">ID: ${container.id}</p>
+                        </div>
+                    `;
+                    
+                    // Add the new card to the list
+                    containerListEl.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('Failed to fetch containers:', error);
+                containerListEl.innerHTML = `
+                    <div class="p-4 bg-red-800 rounded-lg shadow-md col-span-full">
+                        <p class="text-center text-red-100">Failed to load containers. Is the backend running?</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Helper function to create a colored status badge
+        function getStatusBadge(status) {
+            let colorClasses = 'bg-gray-700 text-gray-300'; // Default (e.g., "exited")
+            
+            if (status.startsWith('running') || status.startsWith('up')) {
+                colorClasses = 'bg-green-700 text-green-100';
+            } else if (status.startsWith('restarting')) {
+                colorClasses = 'bg-yellow-700 text-yellow-100';
+            } else if (status.startsWith('paused')) {
+                colorClasses = 'bg-blue-700 text-blue-100';
+            }
+
+            return `<span class="text-xs font-medium px-2.5 py-0.5 rounded-full ${colorClasses}">${status}</span>`;
+        }
+
+    </script>
+
+</body>
+</html>
