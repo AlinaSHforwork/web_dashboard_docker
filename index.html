@@ -4,122 +4,186 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Docker Dashboard</title>
-    <!-- 1. Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Set up a simple dark mode theme for Tailwind
-        tailwind.config = {
-            darkMode: 'class'
-        }
+        tailwind.config = { darkMode: 'class' }
     </script>
     <style>
-        /* Use the Inter font, a clean sans-serif */
-        body {
-            font-family: 'Inter', sans-serif;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .log-scroll::-webkit-scrollbar { width: 8px; }
+        .log-scroll::-webkit-scrollbar-track { background: #1f2937; }
+        .log-scroll::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .log-scroll::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8">
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8 relative">
 
-    <div class="max-w-4xl mx-auto">
-        <!-- Header -->
+    <div class="max-w-5xl mx-auto">
         <header class="mb-6">
             <h1 class="text-3xl font-bold text-blue-400">Docker Dashboard</h1>
-            <p class="text-gray-400">A simple dashboard showing all containers.</p>
+            <p class="text-gray-400">Real-time control panel.</p>
         </header>
 
-        <!-- Container List -->
-        <!-- We will fill this div using JavaScript -->
+        <div class="mb-4">
+            <button onclick="refreshContainers()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">
+                🔄 Refresh
+            </button>
+        </div>
+
         <main id="container-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <!-- Loading state... -->
             <div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full">
                 <p class="text-center text-gray-400">Loading containers...</p>
             </div>
         </main>
     </div>
 
-    <!-- 2. Our JavaScript -->
+    <!-- Log Viewer Modal -->
+    <div id="log-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl flex flex-col h-[80vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-xl font-semibold text-white" id="modal-title">Container Logs</h3>
+                    <span class="animate-pulse h-2 w-2 rounded-full bg-green-500" title="Live Streaming"></span>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4 flex-grow overflow-hidden flex flex-col bg-black">
+                <pre id="log-content" class="bg-gray-950 text-green-400 p-2 rounded-md font-mono text-sm overflow-y-auto log-scroll flex-grow whitespace-pre-wrap break-all"></pre>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end bg-gray-800">
+                <button onclick="closeModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                    Close Connection
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Wait for the page to be fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             fetchContainers();
         });
 
+        function refreshContainers() {
+            const containerListEl = document.getElementById('container-list');
+            containerListEl.innerHTML = `<div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full"><p class="text-center text-gray-400">Refreshing...</p></div>`;
+            fetchContainers();
+        }
+
         async function fetchContainers() {
             const containerListEl = document.getElementById('container-list');
-            
             try {
-                // Call our Python backend's API endpoint
                 const response = await fetch('/api/containers');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const containers = await response.json();
 
-                // Clear the "Loading..." message
                 containerListEl.innerHTML = '';
-
                 if (containers.length === 0) {
-                    containerListEl.innerHTML = `
-                        <div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full">
-                            <p class="text-center text-gray-400">No containers found.</p>
-                        </div>
-                    `;
+                    containerListEl.innerHTML = `<div class="p-4 bg-gray-800 rounded-lg shadow-md col-span-full"><p class="text-center text-gray-400">No containers found.</p></div>`;
                     return;
                 }
 
-                // Loop over each container and create an HTML card for it
                 containers.forEach(container => {
-                    // Create a new div element
                     const card = document.createElement('div');
-                    card.className = 'bg-gray-800 p-4 rounded-lg shadow-md flex flex-col justify-between';
-                    
-                    // Set the card's content
+                    card.className = 'bg-gray-800 p-4 rounded-lg shadow-md flex flex-col justify-between border border-gray-700';
+                    const isRunning = container.status.startsWith('running') || container.status.startsWith('up');
+
                     card.innerHTML = `
                         <div>
                             <div class="flex items-center justify-between mb-2">
-                                <!-- Container Name -->
-                                <h3 class="text-lg font-semibold text-white truncate">${container.name}</h3>
-                                <!-- Status Badge -->
+                                <h3 class="text-lg font-semibold text-white truncate" title="${container.name}">${container.name}</h3>
                                 ${getStatusBadge(container.status)}
                             </div>
-                            <!-- Image Name -->
                             <p class="text-sm text-gray-400 truncate mb-1" title="${container.image}">${container.image}</p>
-                            <!-- Container ID -->
-                            <p class="text-xs text-gray-500 font-mono">ID: ${container.id}</p>
+                            <p class="text-xs text-gray-500 font-mono mb-2">ID: ${container.id}</p>
+                        </div>
+                        <div class="mt-4 space-y-2">
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="handleAction('${container.id}', 'start')" class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-2 rounded transition-colors ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}" ${isRunning ? 'disabled' : ''}>Start</button>
+                                <button onclick="handleAction('${container.id}', 'stop')" class="text-sm bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-1.5 px-2 rounded transition-colors ${!isRunning ? 'opacity-50 cursor-not-allowed' : ''}" ${!isRunning ? 'disabled' : ''}>Stop</button>
+                                <button onclick="handleAction('${container.id}', 'remove')" class="text-sm bg-red-600 hover:bg-red-700 text-white font-semibold py-1.5 px-2 rounded transition-colors ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}" ${isRunning ? 'disabled' : ''}>Remove</button>
+                            </div>
+                            <button onclick="startLogStream('${container.id}', '${container.name}')" class="w-full text-sm bg-gray-700 hover:bg-gray-600 text-blue-300 font-semibold py-1.5 px-2 rounded transition-colors border border-gray-600">
+                                📡 Stream Logs
+                            </button>
                         </div>
                     `;
-                    
-                    // Add the new card to the list
                     containerListEl.appendChild(card);
                 });
-
             } catch (error) {
                 console.error('Failed to fetch containers:', error);
-                containerListEl.innerHTML = `
-                    <div class="p-4 bg-red-800 rounded-lg shadow-md col-span-full">
-                        <p class="text-center text-red-100">Failed to load containers. Is the backend running?</p>
-                    </div>
-                `;
+                containerListEl.innerHTML = `<div class="p-4 bg-red-800 rounded-lg shadow-md col-span-full"><p class="text-center text-red-100">Failed to load containers.</p></div>`;
             }
         }
         
-        // Helper function to create a colored status badge
         function getStatusBadge(status) {
-            let colorClasses = 'bg-gray-700 text-gray-300'; // Default (e.g., "exited")
-            
-            if (status.startsWith('running') || status.startsWith('up')) {
-                colorClasses = 'bg-green-700 text-green-100';
-            } else if (status.startsWith('restarting')) {
-                colorClasses = 'bg-yellow-700 text-yellow-100';
-            } else if (status.startsWith('paused')) {
-                colorClasses = 'bg-blue-700 text-blue-100';
-            }
-
-            return `<span class="text-xs font-medium px-2.5 py-0.5 rounded-full ${colorClasses}">${status}</span>`;
+            let colorClasses = 'bg-gray-700 text-gray-300';
+            if (status.startsWith('running') || status.startsWith('up')) colorClasses = 'bg-green-900 text-green-100 border border-green-700';
+            else if (status.startsWith('restarting')) colorClasses = 'bg-yellow-900 text-yellow-100 border border-yellow-700';
+            else if (status.startsWith('paused')) colorClasses = 'bg-blue-900 text-blue-100 border border-blue-700';
+            return `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${colorClasses}">${status}</span>`;
         }
 
-    </script>
+        async function handleAction(containerId, action) {
+            if (action === 'remove' && !confirm('Are you sure you want to remove this container?')) return;
+            try {
+                const response = await fetch(`/api/containers/${containerId}/${action}`, { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                refreshContainers();
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
 
+        // --- UPDATED: Streaming Log Logic ---
+        const logModal = document.getElementById('log-modal');
+        const logContent = document.getElementById('log-content');
+        const modalTitle = document.getElementById('modal-title');
+        let currentEventSource = null; // Store the connection so we can close it
+
+        function startLogStream(containerId, containerName) {
+            logModal.classList.remove('hidden');
+            modalTitle.textContent = `Logs: ${containerName}`;
+            logContent.textContent = "Connecting to log stream...\n";
+            
+            // Close any previous connection just in case
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+
+            // Connect to the backend streaming endpoint
+            currentEventSource = new EventSource(`/api/containers/${containerId}/logs_stream`);
+
+            // When a new log line arrives...
+            currentEventSource.onmessage = function(event) {
+                // Append the data
+                logContent.textContent += event.data;
+                // Auto-scroll to the bottom
+                logContent.scrollTop = logContent.scrollHeight;
+            };
+
+            currentEventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                logContent.textContent += "\n[Connection lost. Retrying...]\n";
+                // EventSource will automatically try to reconnect
+            };
+        }
+
+        function closeModal() {
+            logModal.classList.add('hidden');
+            // IMPORTANT: Close the connection to stop the backend from streaming
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+        }
+        
+        // Close on click outside or Escape key
+        logModal.addEventListener('click', (e) => { if (e.target === logModal) closeModal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+    </script>
 </body>
 </html>
